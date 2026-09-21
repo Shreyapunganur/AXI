@@ -1,26 +1,12 @@
 `timescale 1ns/1ps
-// =====================================================================
-// axi4_cdc_bridge.v
-// -----------------------------------------------------------------------
-// Sits between the crossbar (clk_a domain) and Slave 1 (clk_b domain).
-// From the crossbar's side, this looks exactly like a normal AXI4
-// slave. From the slave's side, it looks exactly like a normal AXI4
-// master. In between, each of the 5 AXI channels gets its own
-// async_fifo (see async_fifo.v) to cross safely from one clock to the
-// other - request channels (AW, W, AR) flow clk_a -> clk_b, response
-// channels (B, R) flow the other way, clk_b -> clk_a.
-//
-// Each channel's handful of signals is packed into one wide bus before
-// going into its FIFO, then unpacked on the way out - that's all the
-// "pack"/"unpack" wires below are doing.
-// =====================================================================
+
 module axi4_cdc_bridge #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
     parameter ID_WIDTH   = 3,
     parameter STRB_WIDTH = DATA_WIDTH/8
 )(
-    // ---- crossbar-side (clk_a domain) - looks like an AXI4 SLAVE port ----
+  
     input  wire                   clk_a,
     input  wire                   rst_a_n,
     input  wire [ID_WIDTH-1:0]    a_awid,
@@ -57,7 +43,7 @@ module axi4_cdc_bridge #(
     output wire                   a_rvalid,
     input  wire                   a_rready,
 
-    // ---- slave-side (clk_b domain) - looks like an AXI4 MASTER port -------
+  -
     input  wire                   clk_b,
     input  wire                   rst_b_n,
     output wire [ID_WIDTH-1:0]    b_awid,
@@ -100,7 +86,7 @@ module axi4_cdc_bridge #(
     localparam AR_W = AW_W;
     localparam R_W  = ID_WIDTH + DATA_WIDTH + 2 + 1;
 
-    // ---------------- AW channel: clk_a -> clk_b ----------------
+   
     wire aw_full, aw_empty;
     wire [AW_W-1:0] aw_pack_in = {a_awid, a_awaddr, a_awlen, a_awsize, a_awburst};
     wire [AW_W-1:0] aw_pack_out;
@@ -113,7 +99,7 @@ module axi4_cdc_bridge #(
         .rd_clk(clk_b), .rd_rst_n(rst_b_n), .rd_en(b_awvalid && b_awready), .rd_data(aw_pack_out), .empty(aw_empty)
     );
 
-    // ---------------- W channel: clk_a -> clk_b ----------------
+    
     wire w_full, w_empty;
     wire [W_W-1:0] w_pack_in = {a_wdata, a_wstrb, a_wlast};
     wire [W_W-1:0] w_pack_out;
@@ -126,7 +112,7 @@ module axi4_cdc_bridge #(
         .rd_clk(clk_b), .rd_rst_n(rst_b_n), .rd_en(b_wvalid && b_wready), .rd_data(w_pack_out), .empty(w_empty)
     );
 
-    // ---------------- B channel: clk_b -> clk_a (response, reverse dir) ----------------
+  
     wire b_full, b_empty;
     wire [B_W-1:0] b_pack_in = {b_bid, b_bresp};
     wire [B_W-1:0] b_pack_out;
@@ -139,7 +125,7 @@ module axi4_cdc_bridge #(
         .rd_clk(clk_a), .rd_rst_n(rst_a_n), .rd_en(a_bvalid && a_bready), .rd_data(b_pack_out), .empty(b_empty)
     );
 
-    // ---------------- AR channel: clk_a -> clk_b ----------------
+    
     wire ar_full, ar_empty;
     wire [AR_W-1:0] ar_pack_in = {a_arid, a_araddr, a_arlen, a_arsize, a_arburst};
     wire [AR_W-1:0] ar_pack_out;
@@ -152,7 +138,7 @@ module axi4_cdc_bridge #(
         .rd_clk(clk_b), .rd_rst_n(rst_b_n), .rd_en(b_arvalid && b_arready), .rd_data(ar_pack_out), .empty(ar_empty)
     );
 
-    // ---------------- R channel: clk_b -> clk_a (response, reverse dir) ----------------
+   
     wire r_full, r_empty;
     wire [R_W-1:0] r_pack_in = {b_rid, b_rdata, b_rresp, b_rlast};
     wire [R_W-1:0] r_pack_out;
