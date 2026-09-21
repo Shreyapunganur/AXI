@@ -1,61 +1,26 @@
 `timescale 1ns/1ps
-// =====================================================================
-// axi4_master.v
-// -----------------------------------------------------------------------
-// A simple AXI4 master. It turns "commands" from the testbench into
-// legal AXI4 channel handshakes. It does not decide what traffic to
-// send - axi4_tb_top.sv does that.
-//
-// THE ONE IDEA THIS FILE USES EVERYWHERE: SLOTS.
-//   There are NUM_IDS "slots" (one per possible ID value). A slot is
-//   just a small bundle of registers holding one command. The
-//   testbench drops a command into slot [cmd_id]; that slot stays
-//   "busy" until its response comes back. No queue, no head/tail
-//   pointers - "the slot for ID 2" IS the storage for whatever
-//   transaction is currently using ID 2.
-//
-// WHY THIS GIVES US OUT-OF-ORDER TRANSACTIONS FOR FREE:
-//   - Issuing (sending AW/AR out) never waits for a response. Every
-//     cycle we simply scan the slots low-to-high and issue whichever
-//     busy-but-not-yet-issued slot we find first. So slot 3's request
-//     can go out while slot 0 is still waiting on its response -
-///    that's what "multiple outstanding transactions" means.
-//   - Responses are captured completely independently (a separate
-//     always block below), whenever B or R arrives, tagged with
-//     whatever ID is on the wire. They are free to arrive in ANY
-//     order.
-//   - The only rule AXI4 requires - "same ID must complete in the
-//     order it was issued" - falls out automatically: a slot can't be
-//     reused (cmd_ready goes low) until its previous occupant's
-//     response has actually arrived. Since a given ID can only ever
-//     have ONE live transaction, there's nothing to reorder for that
-//     ID in the first place.
-// =====================================================================
+
 module axi4_master #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
-    parameter ID_WIDTH   = 2,             // local ID width -> NUM_IDS slots
+    parameter ID_WIDTH   = 2,            
     parameter STRB_WIDTH = DATA_WIDTH/8,
     parameter NUM_IDS    = (1 << ID_WIDTH)
 )(
     input  wire                   clk,
     input  wire                   rst_n,
 
-    // ---------------- command interface (driven by testbench) ----------
+   
     input  wire                   cmd_valid,
     output wire                   cmd_ready,
-    input  wire                   cmd_write,      // 1 = write , 0 = read
-    input  wire [ID_WIDTH-1:0]    cmd_id,          // which slot to use
+    input  wire                   cmd_write,     
+    input  wire [ID_WIDTH-1:0]    cmd_id,         
     input  wire [ADDR_WIDTH-1:0]  cmd_addr,
-    input  wire [7:0]             cmd_len,        // beats - 1  (AxLEN)
-    input  wire [1:0]             cmd_burst,      // FIXED/INCR/WRAP
-    input  wire [STRB_WIDTH-1:0]  cmd_wstrb,      // strobes, used every beat
-    input  wire [DATA_WIDTH-1:0]  cmd_wseed,      // beat i wdata = wseed + i
-
-    // ---------------- response reporting (to scoreboard/coverage) ------
-    // Two separate interfaces, mirroring the two real response channels,
-    // so a write completion and a read beat landing on the SAME cycle
-    // are both seen (a single shared bus would have to drop one).
+    input  wire [7:0]             cmd_len,        
+    input  wire [1:0]             cmd_burst,      
+    input  wire [STRB_WIDTH-1:0]  cmd_wstrb,    
+    input  wire [DATA_WIDTH-1:0]  cmd_wseed,      
+  
     output reg                    rsp_b_valid,
     output reg  [ID_WIDTH-1:0]    rsp_b_id,
     output reg  [1:0]             rsp_b_resp,
@@ -66,7 +31,7 @@ module axi4_master #(
     output reg  [DATA_WIDTH-1:0]  rsp_r_data,
     output reg                    rsp_r_last,
 
-    // ---------------- AXI4 write address channel ------------------------
+   
     output reg  [ID_WIDTH-1:0]    m_awid,
     output reg  [ADDR_WIDTH-1:0]  m_awaddr,
     output reg  [7:0]             m_awlen,
@@ -75,20 +40,20 @@ module axi4_master #(
     output reg                    m_awvalid,
     input  wire                   m_awready,
 
-    // ---------------- write data channel --------------------------------
+   
     output reg  [DATA_WIDTH-1:0]  m_wdata,
     output reg  [STRB_WIDTH-1:0]  m_wstrb,
     output reg                    m_wlast,
     output reg                    m_wvalid,
     input  wire                   m_wready,
 
-    // ---------------- write response channel -----------------------------
+   
     input  wire [ID_WIDTH-1:0]    m_bid,
     input  wire [1:0]             m_bresp,
     input  wire                   m_bvalid,
     output wire                   m_bready,
 
-    // ---------------- read address channel --------------------------------
+   
     output reg  [ID_WIDTH-1:0]    m_arid,
     output reg  [ADDR_WIDTH-1:0]  m_araddr,
     output reg  [7:0]             m_arlen,
@@ -97,7 +62,7 @@ module axi4_master #(
     output reg                    m_arvalid,
     input  wire                   m_arready,
 
-    // ---------------- read data channel ------------------------------------
+    
     input  wire [ID_WIDTH-1:0]    m_rid,
     input  wire [DATA_WIDTH-1:0]  m_rdata,
     input  wire [1:0]             m_rresp,
@@ -106,13 +71,11 @@ module axi4_master #(
     output wire                   m_rready
 );
 
-    localparam [2:0] AXSIZE_WORD = 3'b010;   // every beat is 4 bytes (see README)
+    localparam [2:0] AXSIZE_WORD = 3'b010;   
 
-    // -----------------------------------------------------------------
-    // the slot array
-    // -----------------------------------------------------------------
+  
     reg                   slot_busy    [0:NUM_IDS-1];
-    reg                   slot_issued  [0:NUM_IDS-1];  // AW/AR already sent?
+    reg                   slot_issued  [0:NUM_IDS-1];  
     reg                   slot_write   [0:NUM_IDS-1];
     reg [ADDR_WIDTH-1:0]  slot_addr    [0:NUM_IDS-1];
     reg [7:0]             slot_len     [0:NUM_IDS-1];
@@ -124,13 +87,13 @@ module axi4_master #(
 
     integer i;
 
-    // accept a new command straight into its slot
+   
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             for (i = 0; i < NUM_IDS; i = i + 1)
                 slot_busy[i] <= 1'b0;
         end else begin
-            // new command claims its slot
+          
             if (cmd_valid && cmd_ready) begin
                 slot_busy[cmd_id]  <= 1'b1;
                 slot_issued[cmd_id]<= 1'b0;
@@ -141,9 +104,7 @@ module axi4_master #(
                 slot_wstrb[cmd_id] <= cmd_wstrb;
                 slot_wseed[cmd_id] <= cmd_wseed;
             end
-            // a response frees its slot (this can freely overlap the
-            // accept above as long as it's not the very same ID - and
-            // cmd_ready already prevents reusing a still-busy ID)
+           
             if (m_bvalid && m_bready)
                 slot_busy[m_bid] <= 1'b0;
             if (m_rvalid && m_rready && m_rlast)
@@ -151,12 +112,7 @@ module axi4_master #(
         end
     end
 
-    // -----------------------------------------------------------------
-    // issue side: every cycle, find the lowest-numbered slot that is
-    // busy but not yet issued, and send its AW/AR out. Simple priority
-    // scan - no round-robin needed here, since these are all requests
-    // from the SAME generator with no fairness concern between them.
-    // -----------------------------------------------------------------
+   
     reg                   pick_valid;
     reg [ID_WIDTH-1:0]    pick_id;
     always @(*) begin
@@ -173,7 +129,7 @@ module axi4_master #(
     localparam S_IDLE = 2'd0, S_AW = 2'd1, S_W = 2'd2, S_AR = 2'd3;
     reg [1:0] state;
     reg [7:0] beat;
-    reg [ID_WIDTH-1:0] cur_id;   // which slot the AW/W (or AR) phase belongs to
+    reg [ID_WIDTH-1:0] cur_id;   
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -211,7 +167,7 @@ module axi4_master #(
                     if (m_awvalid && m_awready) begin
                         m_awvalid       <= 1'b0;
                         slot_issued[cur_id] <= 1'b1;
-                        // start streaming write data, beat 0
+                       
                         beat     <= 8'd0;
                         m_wdata  <= slot_wseed[cur_id];
                         m_wstrb  <= slot_wstrb[cur_id];
@@ -249,11 +205,6 @@ module axi4_master #(
         end
     end
 
-    // -----------------------------------------------------------------
-    // response capture - independent of the issue side above, so B/R
-    // can land in any order relative to how requests were issued.
-    // Always ready: this master never applies backpressure on responses.
-    // -----------------------------------------------------------------
     assign m_bready = 1'b1;
     assign m_rready = 1'b1;
 
