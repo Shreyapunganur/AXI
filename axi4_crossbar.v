@@ -1,42 +1,16 @@
 `timescale 1ns/1ps
-// =====================================================================
-// axi4_crossbar.v
-// -----------------------------------------------------------------------
-// Connects 2 masters to 2 slaves. Any master can reach any slave, and
-// two different masters can be talking to two different slaves at the
-// same time (that parallelism is the whole point of a crossbar over a
-// plain shared bus). Every address is valid (bit 16 of the address
-// simply picks slave 0 or slave 1) - this design keeps every response
-// as a plain OKAY, so there's no decode-error case to handle.
-//
-// TWO IDEAS, USED CONSISTENTLY THROUGHOUT THIS FILE:
-//
-//  1. OWNERSHIP REGISTERS. Both directions that can span more than one
-//     beat - a slave's AW+W write burst, and a slave's R read burst
-//     going back to a master - are protected by a small register that
-//     remembers "who currently owns this path" (NONE / M0 / M1, or for
-//     reads NONE / SLV0 / SLV1). Once set, the owner holds the path
-//     until its burst's last beat, so two bursts can never get mixed
-//     together on the wire.
-//
-//  2. ROUND-ROBIN, used in exactly two spots: deciding who gets a fresh
-//     write-address grant when both masters want the same slave, and
-//     the same idea again for read addresses. Everywhere else (the B
-//     and R response merges) is single-beat-at-a-time or already
-//     protected by the ownership register above, so a plain fixed
-//     priority is enough and there's no need for a second mechanism.
-// =====================================================================
+
 module axi4_crossbar #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
-    parameter LID_WIDTH  = 2,               // each master's own local ID width
-    parameter ID_WIDTH   = LID_WIDTH + 1,   // +1 bit added to tell the masters apart
+    parameter LID_WIDTH  = 2,              
+    parameter ID_WIDTH   = LID_WIDTH + 1,   
     parameter STRB_WIDTH = DATA_WIDTH/8
 )(
     input wire clk,
     input wire rst_n,
 
-    // ============== master-facing port 0 (wired to Master 0) ==============
+    
     input  wire [LID_WIDTH-1:0]  mst0_awid,
     input  wire [ADDR_WIDTH-1:0] mst0_awaddr,
     input  wire [7:0]            mst0_awlen,
@@ -71,7 +45,7 @@ module axi4_crossbar #(
     output wire                  mst0_rvalid,
     input  wire                  mst0_rready,
 
-    // ============== master-facing port 1 (wired to Master 1) ==============
+   
     input  wire [LID_WIDTH-1:0]  mst1_awid,
     input  wire [ADDR_WIDTH-1:0] mst1_awaddr,
     input  wire [7:0]            mst1_awlen,
@@ -106,7 +80,7 @@ module axi4_crossbar #(
     output wire                  mst1_rvalid,
     input  wire                  mst1_rready,
 
-    // ============== slave-facing port 0 (wired to real Slave 0) ==============
+   
     output wire [ID_WIDTH-1:0]   slv0_awid,
     output wire [ADDR_WIDTH-1:0] slv0_awaddr,
     output wire [7:0]            slv0_awlen,
@@ -141,7 +115,7 @@ module axi4_crossbar #(
     input  wire                  slv0_rvalid,
     output wire                  slv0_rready,
 
-    // ============== slave-facing port 1 (wired to real Slave 1) ==============
+   
     output wire [ID_WIDTH-1:0]   slv1_awid,
     output wire [ADDR_WIDTH-1:0] slv1_awaddr,
     output wire [7:0]            slv1_awlen,
@@ -177,22 +151,17 @@ module axi4_crossbar #(
     output wire                  slv1_rready
 );
 
-    // address bit 16 alone picks the target - every address is valid,
-    // so there's no decode-error case to handle anywhere below
+
     wire mst0_aw_to_s1 = mst0_awaddr[16];
     wire mst1_aw_to_s1 = mst1_awaddr[16];
     wire mst0_ar_to_s1 = mst0_araddr[16];
     wire mst1_ar_to_s1 = mst1_araddr[16];
 
-    // ===================================================================
-    // 1a) WRITE OWNERSHIP for slave 0 - decides which master's AW+W is
-    // currently allowed onto slv0's write ports. Held until that
-    // master's WLAST, so the two masters' write data can never mix.
-    // ===================================================================
+   
     localparam OWNER_NONE = 2'd0, OWNER_M0 = 2'd1, OWNER_M1 = 2'd2;
 
     reg [1:0] wr_owner0;
-    reg       wr_rr0;         // round-robin memory: who went last
+    reg       wr_rr0;        
 
     wire m0_wants_wr_s0 = mst0_awvalid && !mst0_aw_to_s1;
     wire m1_wants_wr_s0 = mst1_awvalid && !mst1_aw_to_s1;
@@ -203,7 +172,7 @@ module axi4_crossbar #(
             wr_rr0    <= 1'b0;
         end else if (wr_owner0 == OWNER_NONE) begin
             if (m0_wants_wr_s0 && m1_wants_wr_s0) begin
-                // both want it this cycle: alternate who goes first
+              
                 wr_owner0 <= wr_rr0 ? OWNER_M0 : OWNER_M1;
                 wr_rr0    <= !wr_rr0;
             end else if (m0_wants_wr_s0) begin
@@ -214,7 +183,7 @@ module axi4_crossbar #(
         end else if (wr_owner0 == OWNER_M0) begin
             if (mst0_wvalid && slv0_wready && mst0_wlast)
                 wr_owner0 <= OWNER_NONE;
-        end else begin // OWNER_M1
+        end else begin 
             if (mst1_wvalid && slv0_wready && mst1_wlast)
                 wr_owner0 <= OWNER_NONE;
         end
@@ -234,9 +203,6 @@ module axi4_crossbar #(
     assign slv0_wstrb   = (wr_owner0 == OWNER_M1) ? mst1_wstrb  : mst0_wstrb;
     assign slv0_wlast   = (wr_owner0 == OWNER_M1) ? mst1_wlast  : mst0_wlast;
 
-    // ===================================================================
-    // 1b) WRITE OWNERSHIP for slave 1 - exact mirror of 1a
-    // ===================================================================
     reg [1:0] wr_owner1;
     reg       wr_rr1;
 
@@ -279,11 +245,7 @@ module axi4_crossbar #(
     assign slv1_wstrb   = (wr_owner1 == OWNER_M1) ? mst1_wstrb  : mst0_wstrb;
     assign slv1_wlast   = (wr_owner1 == OWNER_M1) ? mst1_wlast  : mst0_wlast;
 
-    // ===================================================================
-    // 2) READ ADDRESS (AR) arbitration - single beat, so no ownership
-    // register is needed, just a fresh round-robin pick every time there
-    // happens to be a collision.
-    // ===================================================================
+ 
     reg ar_rr0, ar_rr1;
 
     wire m0_wants_ar_s0 = mst0_arvalid && !mst0_ar_to_s1;
@@ -369,12 +331,7 @@ module axi4_crossbar #(
     assign slv1_bready = slv1_b_for_m0 ? (mst0_bready && !slv0_b_for_m0) :
                           slv1_b_for_m1 ? (mst1_bready && !slv0_b_for_m1) : 1'b0;
 
-    // ===================================================================
-    // 5) R-CHANNEL MERGE (read data back to the right master). This one
-    // DOES need an ownership register since a read burst can span many
-    // beats and must not be split up by another burst arriving from the
-    // other slave in the middle of it.
-    // ===================================================================
+
     localparam RSRC_NONE = 2'd0, RSRC_SLV0 = 2'd1, RSRC_SLV1 = 2'd2;
 
     wire slv0_r_for_m0 = slv0_rvalid && (slv0_rid[ID_WIDTH-1] == 1'b0);
@@ -432,8 +389,7 @@ module axi4_crossbar #(
     assign mst1_rresp  = (r_owner1 == RSRC_SLV0) ? slv0_rresp : slv1_rresp;
     assign mst1_rlast  = (r_owner1 == RSRC_SLV0) ? slv0_rlast : slv1_rlast;
 
-    // a real slave's R is only consumed by a master whose r_ownerX
-    // actually points back at that slave right now
+
     assign slv0_rready = slv0_rid[ID_WIDTH-1] ?
                             ((r_owner1 == RSRC_SLV0) ? mst1_rready : 1'b0) :
                             ((r_owner0 == RSRC_SLV0) ? mst0_rready : 1'b0);
