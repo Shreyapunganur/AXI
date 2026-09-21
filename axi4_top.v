@@ -1,31 +1,16 @@
 `timescale 1ns/1ps
-// =====================================================================
-// axi4_top.v
-// -----------------------------------------------------------------------
-// Wires everything together:
-//
-//   Master 0 --\                              /-- Slave 0 (same clock
-//               >-- axi4_crossbar (clk) ------<     as everything else)
-//   Master 1 --/                              \-- axi4_cdc_bridge -- Slave 1
-//                                                  (crosses into clk_s1)
-//
-// The testbench drives each master through its little command
-// interface (cmd_*) and watches its response interface (rsp_*) - see
-// axi4_master.v for what those mean. Everything else in here is just
-// wiring.
-// =====================================================================
+
 module axi4_top #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
-    parameter LID_WIDTH  = 2,               // per-master local ID width
-    parameter ID_WIDTH   = LID_WIDTH + 1,   // expanded ID width used past the crossbar
+    parameter LID_WIDTH  = 2,               
+    parameter ID_WIDTH   = LID_WIDTH + 1,   
     parameter STRB_WIDTH = DATA_WIDTH/8
 )(
-    input wire clk,          // masters, crossbar, Slave 0
-    input wire clk_s1,       // Slave 1's own clock domain
-    input wire rst_n,        // shared async reset (see note in axi4_cdc_bridge.v)
-
-    // ---------------- Master 0 command / response interface ----------------
+    input wire clk,         
+    input wire clk_s1,       
+    input wire rst_n,       
+   
     input  wire                   m0_cmd_valid,
     output wire                   m0_cmd_ready,
     input  wire                   m0_cmd_write,
@@ -45,7 +30,7 @@ module axi4_top #(
     output wire [DATA_WIDTH-1:0]  m0_rsp_r_data,
     output wire                   m0_rsp_r_last,
 
-    // ---------------- Master 1 command / response interface ----------------
+   
     input  wire                   m1_cmd_valid,
     output wire                   m1_cmd_ready,
     input  wire                   m1_cmd_write,
@@ -66,7 +51,7 @@ module axi4_top #(
     output wire                   m1_rsp_r_last
 );
 
-    // ---------------- Master 0 <-> crossbar wires ----------------
+   
     wire [LID_WIDTH-1:0]  m0_awid;   wire [ADDR_WIDTH-1:0] m0_awaddr; wire [7:0] m0_awlen;
     wire [2:0] m0_awsize; wire [1:0] m0_awburst; wire m0_awvalid, m0_awready;
     wire [DATA_WIDTH-1:0] m0_wdata;  wire [STRB_WIDTH-1:0] m0_wstrb; wire m0_wlast, m0_wvalid, m0_wready;
@@ -96,7 +81,7 @@ module axi4_top #(
         .m_rvalid(m0_rvalid), .m_rready(m0_rready)
     );
 
-    // ---------------- Master 1 <-> crossbar wires ----------------
+   
     wire [LID_WIDTH-1:0]  m1_awid;   wire [ADDR_WIDTH-1:0] m1_awaddr; wire [7:0] m1_awlen;
     wire [2:0] m1_awsize; wire [1:0] m1_awburst; wire m1_awvalid, m1_awready;
     wire [DATA_WIDTH-1:0] m1_wdata;  wire [STRB_WIDTH-1:0] m1_wstrb; wire m1_wlast, m1_wvalid, m1_wready;
@@ -126,7 +111,7 @@ module axi4_top #(
         .m_rvalid(m1_rvalid), .m_rready(m1_rready)
     );
 
-    // ---------------- crossbar <-> Slave 0 wires ----------------
+   
     wire [ID_WIDTH-1:0]   s0_awid;   wire [ADDR_WIDTH-1:0] s0_awaddr; wire [7:0] s0_awlen;
     wire [2:0] s0_awsize; wire [1:0] s0_awburst; wire s0_awvalid, s0_awready;
     wire [DATA_WIDTH-1:0] s0_wdata;  wire [STRB_WIDTH-1:0] s0_wstrb; wire s0_wlast, s0_wvalid, s0_wready;
@@ -136,7 +121,7 @@ module axi4_top #(
     wire [ID_WIDTH-1:0]   s0_rid;    wire [DATA_WIDTH-1:0] s0_rdata; wire [1:0] s0_rresp;
     wire s0_rlast, s0_rvalid, s0_rready;
 
-    // ---------------- crossbar <-> Slave 1 wires (clk domain side, "a") ----
+    
     wire [ID_WIDTH-1:0]   s1a_awid;   wire [ADDR_WIDTH-1:0] s1a_awaddr; wire [7:0] s1a_awlen;
     wire [2:0] s1a_awsize; wire [1:0] s1a_awburst; wire s1a_awvalid, s1a_awready;
     wire [DATA_WIDTH-1:0] s1a_wdata;  wire [STRB_WIDTH-1:0] s1a_wstrb; wire s1a_wlast, s1a_wvalid, s1a_wready;
@@ -202,7 +187,7 @@ module axi4_top #(
         .s_rvalid(s0_rvalid), .s_rready(s0_rready)
     );
 
-    // ---------------- CDC bridge <-> Slave 1 wires (clk_s1 domain side, "b") ----
+   
     wire [ID_WIDTH-1:0]   s1b_awid;   wire [ADDR_WIDTH-1:0] s1b_awaddr; wire [7:0] s1b_awlen;
     wire [2:0] s1b_awsize; wire [1:0] s1b_awburst; wire s1b_awvalid, s1b_awready;
     wire [DATA_WIDTH-1:0] s1b_wdata;  wire [STRB_WIDTH-1:0] s1b_wstrb; wire s1b_wlast, s1b_wvalid, s1b_wready;
