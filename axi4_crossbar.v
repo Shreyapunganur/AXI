@@ -284,10 +284,7 @@ module axi4_crossbar #(
     assign slv1_arsize  = ar_s1_grant_m1 ? mst1_arsize  : mst0_arsize;
     assign slv1_arburst = ar_s1_grant_m1 ? mst1_arburst : mst0_arburst;
 
-    // ===================================================================
-    // 3) mstX_awready / mstX_wready / mstX_arready - forward whichever
-    // slave this master's current request is actually going to.
-    // ===================================================================
+   
     assign mst0_awready = (wr_owner0 == OWNER_M0) ? slv0_awready :
                            (wr_owner1 == OWNER_M0) ? slv1_awready : 1'b0;
 
@@ -306,12 +303,7 @@ module axi4_crossbar #(
     assign mst1_arready = mst1_ar_to_s1 ? (ar_s1_grant_m1 ? slv1_arready : 1'b0)
                                           : (ar_s0_grant_m1 ? slv0_arready : 1'b0);
 
-    // ===================================================================
-    // 4) B-CHANNEL MERGE (write responses back to the right master).
-    // Single beat, so a plain fixed-priority pick is enough: slave 0
-    // before slave 1 if both happen to have one for the same master on
-    // the same cycle.
-    // ===================================================================
+  
     wire slv0_b_for_m0 = slv0_bvalid && (slv0_bid[ID_WIDTH-1] == 1'b0);
     wire slv0_b_for_m1 = slv0_bvalid && (slv0_bid[ID_WIDTH-1] == 1'b1);
     wire slv1_b_for_m0 = slv1_bvalid && (slv1_bid[ID_WIDTH-1] == 1'b0);
